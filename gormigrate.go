@@ -131,6 +131,61 @@ func (g *Gormigrate) InitSchema(initSchema InitSchemaFunc) {
 	g.initSchema = initSchema
 }
 
+// MigrationRequired returns true when there are migrations that did not run yet.
+func (g *Gormigrate) MigrationRequired() (bool, error) {
+	if !g.hasMigrations() {
+		return false, nil
+	}
+
+	if err := g.checkReservedID(); err != nil {
+		return true, err
+	}
+
+	if err := g.checkDuplicatedID(); err != nil {
+		return true, err
+	}
+
+	g.begin()
+
+	if !g.tx.HasTable(g.options.TableName) {
+		return true, nil
+	}
+
+	if g.options.ValidateUnknownMigrations {
+		unknownMigrations, err := g.unknownMigrationsHaveHappened()
+		if err != nil {
+			return true, err
+		}
+		if unknownMigrations {
+			return true, ErrUnknownPastMigration
+		}
+	}
+
+	if g.initSchema != nil {
+		canInitializeSchema, err := g.canInitializeSchema()
+		if err != nil {
+			return true, err
+		}
+		if canInitializeSchema {
+			return true, nil
+		}
+	}
+
+	for _, migration := range g.migrations {
+		if len(migration.ID) == 0 {
+			return true, ErrMissingID
+		}
+		migrationRan, err := g.migrationRan(migration)
+		if err != nil {
+			return true, err
+		}
+		if !migrationRan {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 // Migrate executes all migrations that did not run yet.
 func (g *Gormigrate) Migrate() error {
 	if !g.hasMigrations() {
