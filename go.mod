@@ -1,4 +1,4 @@
-module gopkg.in/gormigrate.v1
+module github.com/kyori19/gormigrate
 
 require (
 	cloud.google.com/go v0.33.1 // indirect
